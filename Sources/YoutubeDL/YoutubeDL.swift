@@ -184,14 +184,10 @@ public struct YoutubeDLDownloadingStatus {
 }
 
 public struct YoutubeDLTranscodingStatus {
-    public let totalUnitCount: Int64
-    public let completedUnitCount: Int64
-    public let estimatedTimeRemaining: TimeInterval
+    public let progress: Double
     
-    init(totalUnitCount: Int64, completedUnitCount: Int64, estimatedTimeRemaining: TimeInterval) {
-        self.totalUnitCount = totalUnitCount
-        self.completedUnitCount = completedUnitCount
-        self.estimatedTimeRemaining = estimatedTimeRemaining
+    public init(progress: Double) {
+        self.progress = progress
     }
 }
 
@@ -288,9 +284,8 @@ open class YoutubeDL: NSObject {
                     #endif
                 }
             }
-            
-            dlStatus?(.downloaded)
         }
+        dlStatus?(.downloaded)
     }
     
     lazy var pendingDownloads: [Download] = {
@@ -800,7 +795,7 @@ open class YoutubeDL: NSObject {
             transcoder = Transcoder()
         }
         
-        transcoder?.progressBlock = { progress in
+        transcoder?.progressBlock = { [weak self] progress in
             #if DEBUG
             print(#function, "progress:", progress)
             #endif
@@ -811,6 +806,8 @@ open class YoutubeDL: NSObject {
             
             guard ETA.isFinite else { return }
             
+            self?.dlStatus?(.transcoding(.init(progress: progress)))
+            
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
                 
@@ -818,13 +815,6 @@ open class YoutubeDL: NSObject {
                 let _progress = self.downloader.progress
                 _progress.completedUnitCount = completedUnitCount
                 _progress.estimatedTimeRemaining = ETA
-                
-                let status = YoutubeDLTranscodingStatus(
-                    totalUnitCount: 100,
-                    completedUnitCount: completedUnitCount,
-                    estimatedTimeRemaining: ETA
-                )
-                dlStatus?(.transcoding(status))
             }
         }
         

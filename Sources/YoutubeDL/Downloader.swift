@@ -308,24 +308,22 @@ extension Downloader: URLSessionDownloadDelegate {
         let bytesPerSec = Double(count) / elapsed
         let remain = Double(size - self.bytesWritten) / bytesPerSec
         
-        DispatchQueue.main.async { [weak self] in
+        let status = YoutubeDLDownloadingStatus(
+            totalUnitCount: size,
+            completedUnitCount: bytesWritten,
+            throughput: Int(bytesPerSec),
+            estimatedTimeRemaining: remain
+        )
+        youtubeDL?.dlStatus?(.downloading(status))
+        
+        DispatchQueue.main.async { [weak self]in
             guard let self else { return }
-            
-            let bytesPerSec = Int(bytesPerSec)
             
             let progress = self.progress
             progress.totalUnitCount = size
             progress.completedUnitCount = self.bytesWritten
-            progress.throughput = bytesPerSec
+            progress.throughput = Int(bytesPerSec)
             progress.estimatedTimeRemaining = remain
-            
-            let status = YoutubeDLDownloadingStatus(
-                totalUnitCount: size,
-                completedUnitCount: self.bytesWritten,
-                throughput: bytesPerSec,
-                estimatedTimeRemaining: remain
-            )
-            self.youtubeDL?.dlStatus?(.downloading(status))
         }
     }
 }
