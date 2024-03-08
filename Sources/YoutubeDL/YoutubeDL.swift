@@ -854,6 +854,26 @@ open class YoutubeDL: NSObject {
             progress.fileTotalCount = 1
         }
         
+        if let continuation = self.finishedContinuation {
+            continuation.yield(url)
+        } else {
+            notify(body: NSLocalizedString("Download complete!", comment: "Notification body"))
+            dlStatus?(.downloaded)
+        }
+        
+        DispatchQueue.main.async {
+            let progress = self.downloader.progress
+            progress.fileCompletedCount = 1
+            do {
+                let attributes = try FileManager.default.attributesOfItem(atPath: url.path) as NSDictionary
+                progress.completedUnitCount = Int64(attributes.fileSize())
+            }
+            catch {
+                progress.localizedDescription = error.localizedDescription
+            }
+        }
+        
+        /*
         PHPhotoLibrary.shared().performChanges({
             _ = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
         }) { [weak self] (success, error) in
@@ -882,6 +902,7 @@ open class YoutubeDL: NSObject {
                 }
             }
         }
+         */
     }
         
     fileprivate static func movePythonModule(_ location: URL) throws {
