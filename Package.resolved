@@ -6,8 +6,8 @@
         "repositoryURL": "https://github.com/kewlbear/FFmpeg-iOS-Lame",
         "state": {
           "branch": null,
-          "revision": "c0b202a16a43933cb16bf9914c76e00f0d24d57e",
-          "version": "0.0.6-b20230416-200000"
+          "revision": "1808fa5a1263c5e216646cd8421fc7dcb70520cc",
+          "version": "0.0.6-b20230730-000000"
         }
       },
       {
@@ -15,8 +15,8 @@
         "repositoryURL": "https://github.com/kewlbear/FFmpeg-iOS-Support",
         "state": {
           "branch": null,
-          "revision": "60df9313af3a5869255b9654cd88eede4646295b",
-          "version": "0.0.1"
+          "revision": "be3bd9149ac53760e8725652eee99c405b2be47a",
+          "version": "0.0.2"
         }
       },
       {

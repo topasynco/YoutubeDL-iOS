@@ -80,6 +80,8 @@ open class Downloader: NSObject {
         return url
     }()
     
+    public weak var youtubeDL: YoutubeDL?
+    
     init(backgroundURLSessionIdentifier: String?, createURLSession: Bool = true) {
         super.init()
         
@@ -100,7 +102,6 @@ open class Downloader: NSObject {
         configuration.networkServiceType = .responsiveAV
         
         session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
-        print(session, "created")
     }
 
     open func download(request: URLRequest, url: URL, resume: Bool) -> URLSessionDownloadTask {
@@ -108,7 +109,6 @@ open class Downloader: NSObject {
         
         let task = session.downloadTask(with: request)
         task.taskDescription = url.relativePath
-//        task.priority = URLSessionTask.highPriority
         
         if resume {
             isDownloading = true
@@ -121,12 +121,12 @@ open class Downloader: NSObject {
 public func removeItem(at url: URL) {
     do {
         try FileManager.default.removeItem(at: url)
-//        print(#function, "removed", url.lastPathComponent)
-    }
-    catch {
+    } catch {
         let error = error as NSError
         if error.domain != NSCocoaErrorDomain || error.code != CocoaError.fileNoSuchFile.rawValue {
+            #if DEBUG
             print(#function, error)
+            #endif
         }
     }
 }
@@ -145,11 +145,15 @@ extension Downloader: URLSessionDelegate {
     }
     
     public func urlSession(_ session: URLSession, didBecomeInvalidWithError error: Error?) {
+        #if DEBUG
         print(#function, session, error ?? "no error")
+        #endif
     }
     
     public func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        #if DEBUG
         print(#function, session)
+        #endif
         didFinishBackgroundEvents?.resume()
     }
 }
@@ -157,9 +161,10 @@ extension Downloader: URLSessionDelegate {
 @available(iOS 12.0, *)
 extension Downloader: URLSessionTaskDelegate {
     public func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-//        print(#function, session, task, error ?? "no error")
         if let error = error {
+            #if DEBUG
             print(#function, session, task, error)
+            #endif
         }
     }
 }
@@ -174,13 +179,11 @@ public class StopWatch {
         report(item: #function)
     }
     
-    deinit {
-//        report(item: #function)
-    }
-    
     public func report(item: String? = nil) {
         let now = Date()
+        #if DEBUG
         print(now, item ?? name, "took", now.timeIntervalSince(t0), "seconds")
+        #endif
     }
 }
 
@@ -188,21 +191,20 @@ public class StopWatch {
 extension Downloader: URLSessionDownloadDelegate {
    
     public func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
-        guard let taskDescription = downloadTask.taskDescription else {
+        guard let _ = downloadTask.taskDescription else {
+            #if DEBUG
             print(#function, "no task description", downloadTask)
+            #endif
             return
         }
         
-//        guard currentRequest == nil || downloadTask.originalRequest == currentRequest && downloadTask.originalRequest?.value(forHTTPHeaderField: "Range") == currentRequest?.value(forHTTPHeaderField: "Range") else {
-//            print(#function, "ignore", downloadTask.info, "(current request:", currentRequest ?? "nil", ")")
-//            return
-//        }
-        
         let (_, range, size) = (downloadTask.response as? HTTPURLResponse)?.contentRange
             ?? (nil, -1 ..< -1, -1)
+        #if DEBUG
         print(#function, range, size, downloadTask.info, currentRequest?.value(forHTTPHeaderField: "Range") ?? "no current request or range"
 //              , session, location
         )
+        #endif
         
         let kind = downloadTask.kind
         let url = downloadTask.taskDescription.map {
@@ -214,10 +216,16 @@ extension Downloader: URLSessionDownloadDelegate {
                 Task {
                     let tasks = await session.tasks.2
                     guard let task = selector(tasks.filter { $0.state == .suspended }) else {
+                        #if DEBUG
                         print(#function, "no more task", tasks.map(\.state.rawValue))
+                        #endif
                         return
                     }
+                    
+                    #if DEBUG
                     print(#function, task.kind, task.originalRequest?.value(forHTTPHeaderField: "Range") ?? "no range", task.taskDescription ?? "no task description")
+                    #endif
+                    
                     task.resume()
                 }
             }
@@ -226,7 +234,10 @@ extension Downloader: URLSessionDownloadDelegate {
                 notify(body: "finished \(url.lastPathComponent)")
                 removeItem(at: url)
                 try FileManager.default.moveItem(at: location, to: url)
+                
+                #if DEBUG
                 print(#function, "moved to", url.path)
+                #endif
                 
                 resume { tasks in
                     tasks.first { $0.hasPrefix(0) }
@@ -235,7 +246,7 @@ extension Downloader: URLSessionDownloadDelegate {
                 
                 streamContinuation?.yield((url, kind))
             } else {
-                //                notify(body: "\(range.upperBound * 100 / size)% \(url.lastPathComponent)")
+                notify(body: "\(range.upperBound * 100 / size)% \(url.lastPathComponent)")
                 let part = url.appendingPathExtension("part")
                 let file = try FileHandle(forWritingTo: part)
                 
@@ -277,7 +288,9 @@ extension Downloader: URLSessionDownloadDelegate {
             }
         }
         catch {
+            #if DEBUG
             print(error)
+            #endif
         }
     }
     
@@ -295,12 +308,24 @@ extension Downloader: URLSessionDownloadDelegate {
         let bytesPerSec = Double(count) / elapsed
         let remain = Double(size - self.bytesWritten) / bytesPerSec
         
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            
+            let bytesPerSec = Int(bytesPerSec)
+            
             let progress = self.progress
             progress.totalUnitCount = size
             progress.completedUnitCount = self.bytesWritten
-            progress.throughput = Int(bytesPerSec)
+            progress.throughput = bytesPerSec
             progress.estimatedTimeRemaining = remain
+            
+            let status = YoutubeDLDownloadingStatus(
+                totalUnitCount: size,
+                completedUnitCount: self.bytesWritten,
+                throughput: bytesPerSec,
+                estimatedTimeRemaining: remain
+            )
+            self.youtubeDL?.dlStatus?(.downloading(status))
         }
     }
 }
@@ -322,20 +347,7 @@ extension URLSessionDownloadTask {
 
 var isTest = false
 
-// FIXME: move to view controller?
 @available(iOS 12.0, *)
 public func notify(body: String, identifier: String = "Download") {
-    guard !isTest else { return }
-    UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound, .providesAppNotificationSettings]) { (granted, error) in
-        guard granted else {
-            print(#function, "granted =", granted, error ?? "no error")
-            return
-        }
-        
-        print(#function, body)
-        let content = UNMutableNotificationContent()
-        content.body = body
-        let notificationRequest = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(notificationRequest, withCompletionHandler: nil)
-    }
+    
 }

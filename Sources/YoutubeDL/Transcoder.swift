@@ -48,30 +48,35 @@ open class Transcoder {
                 if let timeRange = timeRange {
                     maxTime = (timeRange.upperBound - timeRange.lowerBound) * 1_000_000
                 } else {
-                    maxTime = 1_000_000 // FIXME: probe?
+                    maxTime = 1_000_000
                 }
+                #if DEBUG
                 print(#function, "await lines", pipe.fileHandleForReading)
+                #endif
+                
                 for try await line in pipe.fileHandleForReading.bytes.lines {
-                    //                    print(#function, line)
                     let components = line.split(separator: "=")
                     assert(components.count == 2)
                     let key = String(components[0])
                     info[key] = String(components[1])
                     if key == "progress" {
-//                        print(#function, info)
                         if let time = Int(info["out_time_us"] ?? ""),
-                           time >= 0 { // FIXME: reset global variable(s) causing it
+                           time >= 0 {
                             let progress = Double(time) / maxTime
+                            #if DEBUG
                             print(#function, "progress:", progress
 //                                  , info["out_time_us"] ?? "nil", time
                             )
+                            #endif
                             progressBlock?(progress)
                         }
                         guard info["progress"] != "end" else { break }
                         info.removeAll()
                     }
                 }
+                #if DEBUG
                 print(#function, "no more lines?", pipe.fileHandleForReading)
+                #endif
             } else {
                 // Fallback on earlier versions
             }
@@ -106,7 +111,9 @@ open class Transcoder {
         ]
         
         let code = ffmpeg(args)
+        #if DEBUG
         print(#function, code)
+        #endif
         
         try pipe.fileHandleForWriting.close()
         
@@ -118,7 +125,9 @@ open class Transcoder {
 
 public func format(_ seconds: Int) -> String? {
     guard seconds >= 0 else {
+        #if DEBUG
         print(#function, "invalid seconds:", seconds)
+        #endif
         return nil
     }
     

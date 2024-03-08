@@ -32,7 +32,6 @@ extension HTTPURLResponse {
         } else {
             contentRange = allHeaderFields["Content-Range"] as? String
         }
-//        print(#function, contentRange ?? "no Content-Range?")
         
         guard let string = contentRange else { return nil }
         let scanner = Scanner(string: string)
@@ -40,6 +39,7 @@ extension HTTPURLResponse {
         var start: Int64 = -1
         var end: Int64 = -1
         var size: Int64 = -1
+        
         guard scanner.scanUpToCharacters(from: .decimalDigits, into: &prefix),
               scanner.scanInt64(&start),
               scanner.scanString("-", into: nil),
