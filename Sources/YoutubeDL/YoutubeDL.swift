@@ -288,6 +288,8 @@ open class YoutubeDL: NSObject {
                     #endif
                 }
             }
+            
+            dlStatus?(.downloaded)
         }
     }
     
@@ -724,6 +726,8 @@ open class YoutubeDL: NSObject {
         print(#function, "merging...")
         #endif
         
+        dlStatus?(.merging)
+        
         DispatchQueue.main.async {
             let progress = self.downloader.progress
             progress.kind = nil
@@ -734,11 +738,16 @@ open class YoutubeDL: NSObject {
             progress.estimatedTimeRemaining = nil
         }
         
-        session.exportAsynchronously {
+        session.exportAsynchronously { [weak self] in
+            guard let self else { return }
+            
             #if DEBUG
             print(#function, "finished merge", session.status.rawValue)
-            print(#function, "took", self.downloader.dateComponentsFormatter.string(from: ProcessInfo.processInfo.systemUptime - t0) ?? "?")
+            print(#function, "took", downloader.dateComponentsFormatter.string(from: ProcessInfo.processInfo.systemUptime - t0) ?? "?")
             #endif
+            
+            dlStatus?(.merged)
+            
             if session.status == .completed {
                 if !self.keepIntermediates {
                     removeItem(at: videoURL)
@@ -858,7 +867,6 @@ open class YoutubeDL: NSObject {
             continuation.yield(url)
         } else {
             notify(body: NSLocalizedString("Download complete!", comment: "Notification body"))
-            dlStatus?(.downloaded)
         }
         
         DispatchQueue.main.async {
@@ -887,7 +895,6 @@ open class YoutubeDL: NSObject {
                 continuation.yield(url)
             } else {
                 notify(body: NSLocalizedString("Download complete!", comment: "Notification body"))
-                dlStatus?(.downloaded)
             }
             
             DispatchQueue.main.async {
