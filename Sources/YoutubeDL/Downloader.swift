@@ -82,7 +82,7 @@ open class Downloader: NSObject {
     
     public weak var youtubeDL: YoutubeDL?
     
-    init(backgroundURLSessionIdentifier: String?, createURLSession: Bool = true) {
+    public init(backgroundURLSessionIdentifier: String?, createURLSession: Bool = true) {
         super.init()
         
         decimalFormatter.numberStyle = .decimal

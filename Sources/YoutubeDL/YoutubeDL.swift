@@ -160,8 +160,10 @@ public enum YoutubeDLError: Error {
 public enum YoutubeDLStatus {
     case downloading(YoutubeDLDownloadingStatus)
     case downloaded
-    case transcoding
+    case transcoding(YoutubeDLTranscodingStatus)
+    case transcoded
     case merging
+    case merged
 }
 
 public struct YoutubeDLDownloadingStatus {
@@ -177,6 +179,18 @@ public struct YoutubeDLDownloadingStatus {
         self.totalUnitCount = totalUnitCount
         self.completedUnitCount = completedUnitCount
         self.throughput = throughput
+        self.estimatedTimeRemaining = estimatedTimeRemaining
+    }
+}
+
+public struct YoutubeDLTranscodingStatus {
+    public let totalUnitCount: Int64
+    public let completedUnitCount: Int64
+    public let estimatedTimeRemaining: TimeInterval
+    
+    init(totalUnitCount: Int64, completedUnitCount: Int64, estimatedTimeRemaining: TimeInterval) {
+        self.totalUnitCount = totalUnitCount
+        self.completedUnitCount = completedUnitCount
         self.estimatedTimeRemaining = estimatedTimeRemaining
     }
 }
@@ -788,10 +802,20 @@ open class YoutubeDL: NSObject {
             
             guard ETA.isFinite else { return }
             
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                
+                let completedUnitCount = Int64(progress * 100)
                 let _progress = self.downloader.progress
-                _progress.completedUnitCount = Int64(progress * 100)
+                _progress.completedUnitCount = completedUnitCount
                 _progress.estimatedTimeRemaining = ETA
+                
+                let status = YoutubeDLTranscodingStatus(
+                    totalUnitCount: 100,
+                    completedUnitCount: completedUnitCount,
+                    estimatedTimeRemaining: ETA
+                )
+                dlStatus?(.transcoding(status))
             }
         }
         
@@ -810,6 +834,8 @@ open class YoutubeDL: NSObject {
         }
         
         notify(body: NSLocalizedString("FinishedTranscoding", comment: "Notification body"))
+        
+        dlStatus?(.transcoded)
         
         _ = tryMerge(directory: url.deletingLastPathComponent(), title: url.title, timeRange: download.timeRange)
     }
@@ -830,15 +856,18 @@ open class YoutubeDL: NSObject {
         
         PHPhotoLibrary.shared().performChanges({
             _ = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: url)
-        }) { (success, error) in
+        }) { [weak self] (success, error) in
             #if DEBUG
             print(#function, success, error ?? "")
             #endif
+            
+            guard let self else { return }
             
             if let continuation = self.finishedContinuation {
                 continuation.yield(url)
             } else {
                 notify(body: NSLocalizedString("Download complete!", comment: "Notification body"))
+                dlStatus?(.downloaded)
             }
             
             DispatchQueue.main.async {
